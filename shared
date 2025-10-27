@@ -1,0 +1,76 @@
+import os
+from dotenv import load_dotenv
+from fastmcp import FastMCP
+
+from src.platforms.instagram import get_instagram_hashtags
+from src.platforms.linkedin import get_linkedin_hashtags
+from src.platforms.twitter import get_twitter_hashtags
+from src.platforms.facebook import get_facebook_hashtags
+
+load_dotenv()
+
+# Initialize FastMCP server with SSE transport
+mcp = FastMCP("social-hashtag-mcp")
+
+@mcp.tool()
+async def get_instagram_hashtags_tool(topic: str, niche: str = None) -> dict:
+    """
+    Get trending Instagram hashtags for a topic. Best for visual content, lifestyle, and influencer niches.
+    
+    Args:
+        topic: Main topic/keyword (e.g., 'fitness', 'travel', 'food')
+        niche: Optional specific niche (e.g., 'yoga', 'vegan', 'photography')
+    
+    Returns:
+        Dictionary with hashtags, post counts, and metadata
+    """
+    result = await get_instagram_hashtags(topic=topic, niche=niche)
+    return result
+
+@mcp.tool()
+async def get_linkedin_hashtags_tool(topic: str, industry: str = None) -> dict:
+    """
+    Get professional LinkedIn hashtags for business and career content.
+    
+    Args:
+        topic: Main topic (e.g., 'leadership', 'AI', 'marketing')
+        industry: Optional industry (e.g., 'tech', 'finance', 'healthcare')
+    
+    Returns:
+        Dictionary with hashtags, follower counts, and metadata
+    """
+    result = await get_linkedin_hashtags(topic=topic, industry=industry)
+    return result
+
+@mcp.tool()
+async def get_twitter_hashtags_tool(topic: str) -> dict:
+    """
+    Get real-time trending Twitter/X hashtags for news and viral content.
+    
+    Args:
+        topic: Main topic or keyword
+    
+    Returns:
+        Dictionary with hashtags, mention counts, and metadata
+    """
+    result = await get_twitter_hashtags(topic=topic)
+    return result
+
+@mcp.tool()
+async def get_facebook_hashtags_tool(topic: str, audience_type: str = None) -> dict:
+    """
+    Get Facebook hashtags optimized for community and local engagement.
+    
+    Args:
+        topic: Main topic
+        audience_type: Optional audience type (e.g., 'local', 'parents', 'small_business')
+    
+    Returns:
+        Dictionary with hashtags, engagement scores, and metadata
+    """
+    result = await get_facebook_hashtags(topic=topic, audience_type=audience_type)
+    return result
+
+if __name__ == "__main__":
+    # Run with SSE transport on port 8000
+    mcp.run(transport="sse", port=8000)
