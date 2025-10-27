@@ -1,0 +1,76 @@
+import os
+import httpx
+from typing import Optional
+
+async def get_instagram_hashtags(topic: str, niche: Optional[str] = None) -> dict:
+    """
+    Get trending Instagram hashtags for a topic
+    
+    Uses RapidAPI Instagram Data API
+    Docs: https://rapidapi.com/yuananf/api/instagram-data1
+    """
+    
+    api_key = os.getenv("RAPIDAPI_KEY")
+    if not api_key:
+        return {
+            "error": "RAPIDAPI_KEY not found in environment",
+            "hashtags": []
+        }
+    
+    # Combine topic and niche for search
+    search_term = f"{topic} {niche}" if niche else topic
+    
+    url = "https://instagram-data1.p.rapidapi.com/hashtag/search"
+    
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "instagram-data1.p.rapidapi.com"
+    }
+    
+    params = {
+        "keyword": search_term
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract hashtags from response
+            hashtags = []
+            if "data" in data:
+                for item in data["data"][:15]:  # Top 15 hashtags
+                    hashtags.append({
+                        "tag": f"#{item.get('name', '')}",
+                        "posts": item.get('media_count', 0)
+                    })
+            
+            return {
+                "platform": "instagram",
+                "topic": topic,
+                "niche": niche,
+                "hashtags": hashtags,
+                "count": len(hashtags)
+            }
+            
+    except httpx.HTTPError as e:
+        return {
+            "error": f"API request failed: {str(e)}",
+            "platform": "instagram",
+            "hashtags": _get_fallback_hashtags(topic, niche)
+        }
+
+def _get_fallback_hashtags(topic: str, niche: Optional[str]) -> list:
+    """Provide basic hashtags when API fails"""
+    base_tags = [
+        f"#{topic.replace(' ', '')}",
+        f"#{topic.replace(' ', '')}gram",
+        "#instagood",
+        "#photooftheday"
+    ]
+    
+    if niche:
+        base_tags.insert(1, f"#{niche.replace(' ', '')}")
+    
+    return [{"tag": tag, "posts": "N/A"} for tag in base_tags[:10]]
