@@ -1,0 +1,83 @@
+import os
+import httpx
+from typing import Optional
+
+async def get_twitter_hashtags(topic: str) -> dict:
+    """
+    Get trending Twitter/X hashtags for a topic
+    
+    Uses Twitter API v2
+    Docs: https://developer.twitter.com/en/docs/twitter-api
+    """
+    
+    bearer_token = os.getenv("TWITTER_BEARER_TOKEN")
+    if not bearer_token:
+        return {
+            "error": "TWITTER_BEARER_TOKEN not found in environment",
+            "hashtags": []
+        }
+    
+    url = "https://api.twitter.com/2/tweets/search/recent"
+    
+    headers = {
+        "Authorization": f"Bearer {bearer_token}"
+    }
+    
+    # Search for tweets with the topic
+    params = {
+        "query": f"#{topic.replace(' ', '')} OR {topic}",
+        "max_results": 100,
+        "tweet.fields": "public_metrics,entities"
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract and count hashtags
+            hashtag_counts = {}
+            if "data" in data:
+                for tweet in data["data"]:
+                    if "entities" in tweet and "hashtags" in tweet["entities"]:
+                        for hashtag in tweet["entities"]["hashtags"]:
+                            tag = hashtag["tag"].lower()
+                            hashtag_counts[tag] = hashtag_counts.get(tag, 0) + 1
+            
+            # Sort by frequency
+            sorted_hashtags = sorted(
+                hashtag_counts.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:15]
+            
+            hashtags = [
+                {"tag": f"#{tag}", "mentions": count}
+                for tag, count in sorted_hashtags
+            ]
+            
+            return {
+                "platform": "twitter",
+                "topic": topic,
+                "hashtags": hashtags,
+                "count": len(hashtags)
+            }
+            
+    except httpx.HTTPError as e:
+        return {
+            "error": f"API request failed: {str(e)}",
+            "platform": "twitter",
+            "hashtags": _get_fallback_hashtags(topic)
+        }
+
+def _get_fallback_hashtags(topic: str) -> list:
+    """Provide basic hashtags when API fails"""
+    base_tags = [
+        f"#{topic.replace(' ', '')}",
+        f"#{topic.replace(' ', '')}News",
+        "#Trending",
+        "#Breaking"
+    ]
+    
+    return [{"tag": tag, "mentions": "N/A"} for tag in base_tags[:10]]
