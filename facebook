@@ -1,0 +1,87 @@
+import os
+import httpx
+from typing import Optional
+
+async def get_facebook_hashtags(topic: str, audience_type: Optional[str] = None) -> dict:
+    """
+    Get Facebook hashtags optimized for community engagement
+    
+    Note: Facebook has limited hashtag API support. This uses RapidAPI alternative.
+    Docs: https://developers.facebook.com/docs/graph-api
+    """
+    
+    api_key = os.getenv("RAPIDAPI_KEY")
+    if not api_key:
+        return {
+            "error": "RAPIDAPI_KEY not found in environment",
+            "hashtags": []
+        }
+    
+    search_term = f"{topic} {audience_type}" if audience_type else topic
+    
+    # Using RapidAPI Social Media API as alternative
+    url = "https://social-media-data-api.p.rapidapi.com/hashtags/facebook"
+    
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "social-media-data-api.p.rapidapi.com"
+    }
+    
+    params = {
+        "query": search_term
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+            
+            hashtags = []
+            if "results" in data:
+                for item in data["results"][:15]:
+                    hashtags.append({
+                        "tag": f"#{item.get('hashtag', '')}",
+                        "engagement": item.get('engagement_score', 0)
+                    })
+            
+            return {
+                "platform": "facebook",
+                "topic": topic,
+                "audience_type": audience_type,
+                "hashtags": hashtags,
+                "count": len(hashtags)
+            }
+            
+    except httpx.HTTPError as e:
+        # Fallback to community-focused hashtags
+        return {
+            "error": f"API request failed: {str(e)}",
+            "platform": "facebook",
+            "hashtags": _get_fallback_hashtags(topic, audience_type)
+        }
+
+def _get_fallback_hashtags(topic: str, audience_type: Optional[str]) -> list:
+    """Provide community-focused hashtags when API fails"""
+    
+    base_tags = [
+        f"#{topic.replace(' ', '')}",
+        "#Community",
+        "#Local",
+        "#ShareTheLove"
+    ]
+    
+    # Audience-specific additions
+    if audience_type:
+        audience_map = {
+            "local": ["#LocalBusiness", "#ShopLocal", "#CommunityFirst"],
+            "parents": ["#Parenting", "#FamilyLife", "#MomLife", "#DadLife"],
+            "small_business": ["#SmallBusiness", "#SupportSmallBusiness", "#LocalShop"],
+            "community": ["#CommunityLove", "#Neighbors", "#TogetherWeCan"]
+        }
+        
+        audience_lower = audience_type.lower().replace(" ", "_")
+        if audience_lower in audience_map:
+            base_tags.extend(audience_map[audience_lower])
+    
+    return [{"tag": tag, "engagement": "N/A"} for tag in base_tags[:12]]
