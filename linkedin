@@ -1,0 +1,93 @@
+import os
+import httpx
+from typing import Optional
+
+async def get_linkedin_hashtags(topic: str, industry: Optional[str] = None) -> dict:
+    """
+    Get professional LinkedIn hashtags for a topic
+    
+    Uses RapidAPI LinkedIn Data API
+    Docs: https://rapidapi.com/rockapis-rockapis-default/api/linkedin-data-api
+    """
+    
+    api_key = os.getenv("RAPIDAPI_KEY")
+    if not api_key:
+        return {
+            "error": "RAPIDAPI_KEY not found in environment",
+            "hashtags": []
+        }
+    
+    # LinkedIn hashtag patterns are more professional
+    search_term = f"{topic} {industry}" if industry else topic
+    
+    # Note: This is a placeholder URL - adjust based on actual API endpoint
+    url = "https://linkedin-data-api.p.rapidapi.com/search-hashtags"
+    
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "linkedin-data-api.p.rapidapi.com"
+    }
+    
+    params = {
+        "keywords": search_term
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract hashtags (adjust based on actual API response structure)
+            hashtags = []
+            if "hashtags" in data:
+                for item in data["hashtags"][:15]:
+                    hashtags.append({
+                        "tag": f"#{item.get('name', '')}",
+                        "followers": item.get('follower_count', 0)
+                    })
+            
+            return {
+                "platform": "linkedin",
+                "topic": topic,
+                "industry": industry,
+                "hashtags": hashtags,
+                "count": len(hashtags)
+            }
+            
+    except httpx.HTTPError as e:
+        # Fallback to curated professional hashtags
+        return {
+            "error": f"API request failed: {str(e)}",
+            "platform": "linkedin",
+            "hashtags": _get_fallback_hashtags(topic, industry)
+        }
+
+def _get_fallback_hashtags(topic: str, industry: Optional[str]) -> list:
+    """Provide professional hashtags when API fails"""
+    
+    # Common LinkedIn hashtag patterns
+    base_tags = [
+        f"#{topic.replace(' ', '').title()}",
+        f"#{industry.replace(' ', '').title()}" if industry else "#Business",
+        "#Leadership",
+        "#Innovation",
+        "#ProfessionalDevelopment",
+        "#CareerGrowth",
+        "#Networking"
+    ]
+    
+    # Industry-specific additions
+    if industry:
+        industry_map = {
+            "tech": ["#Technology", "#AI", "#DigitalTransformation"],
+            "finance": ["#Finance", "#Investing", "#FinTech"],
+            "marketing": ["#Marketing", "#DigitalMarketing", "#ContentStrategy"],
+            "healthcare": ["#Healthcare", "#MedTech", "#HealthInnovation"]
+        }
+        
+        industry_lower = industry.lower()
+        if industry_lower in industry_map:
+            base_tags.extend(industry_map[industry_lower])
+    
+    return [{"tag": tag, "followers": "N/A"} for tag in base_tags[:12]]
